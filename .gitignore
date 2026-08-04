@@ -1,0 +1,4 @@
+copy.sh
+build/
+out/
+config.log

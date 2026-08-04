@@ -2,15 +2,40 @@
 set -eu
 
 display=:0
-while :; do
-  Xorg "$display" vt1 -nolisten tcp &
-  xorg_pid=$!
-  trap 'kill "$xorg_pid" 2>/dev/null || true; exit 0' HUP INT TERM
-  until [ -S /tmp/.X11-unix/X0 ]; do
-    kill -0 "$xorg_pid" 2>/dev/null || exit 1
-    sleep 1
-  done
-  DISPLAY="$display" /usr/bin/adavalinux-greeter || true
+if [ ! -S /run/udev/control ]; then
+  mkdir -p /run /run/udev
+  /usr/lib/systemd/systemd-udevd --daemon
+  /usr/bin/udevadm trigger --subsystem-match=input &
+  /usr/bin/udevadm settle --timeout=5 >/dev/null 2>&1 &
+fi
+
+Xorg "$display" vt1 -nolisten tcp &
+xorg_pid=$!
+
+cleanup() {
   kill "$xorg_pid" 2>/dev/null || true
   wait "$xorg_pid" 2>/dev/null || true
+}
+trap cleanup EXIT HUP INT TERM
+
+ready=0
+attempt=0
+while [ "$attempt" -lt 50 ]; do
+  if DISPLAY="$display" /usr/bin/adavalinux-x-ready; then
+    ready=1
+    break
+  fi
+  if ! kill -0 "$xorg_pid" 2>/dev/null; then
+    echo 'adavalinux-display-manager: Xorg failed to start' >&2
+    exit 1
+  fi
+  attempt=$((attempt + 1))
+  sleep 1
 done
+
+if [ "$ready" -ne 1 ]; then
+  echo 'adavalinux-display-manager: Xorg failed to start' >&2
+  exit 1
+fi
+
+DISPLAY="$display" /usr/bin/adavalinux-logon

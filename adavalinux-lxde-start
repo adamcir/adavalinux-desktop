@@ -1,0 +1,136 @@
+#!/bin/sh
+set -eu
+
+display=${DISPLAY:-:0}
+xorg_pid=
+xorg_log=/var/log/Xorg.0.log
+
+# VTE needs a UNIX98 pseudoterminal for the shell inside LXTerminal.  BusyBox
+# init does not process fstab, so ensure devpts is available for installed
+# systems as well as fresh images.
+if ! awk '$2=="/dev/pts" && $4 ~ /(^|,)ptmxmode=666(,|$)/{found=1} END{exit !found}' /proc/mounts 2>/dev/null; then
+  mkdir -p /dev/pts
+  if awk '$2=="/dev/pts"{found=1} END{exit !found}' /proc/mounts 2>/dev/null; then
+    mount -o remount,mode=620,ptmxmode=666 -t devpts devpts /dev/pts 2>/dev/null || true
+  else
+    mount -t devpts -o mode=620,ptmxmode=666 devpts /dev/pts 2>/dev/null || true
+  fi
+fi
+# A previous mdev scan can leave a standalone /dev/ptmx node behind.  VTE's
+# forkpty() must open the ptmx node belonging to the mounted devpts instance.
+ln -sfn pts/ptmx /dev/ptmx 2>/dev/null || true
+
+# Populate Xorg input devices before starting the server.
+if [ ! -S /run/udev/control ]; then
+  mkdir -p /run /run/udev
+  if [ -x /usr/lib/systemd/systemd-udevd ]; then
+    /usr/lib/systemd/systemd-udevd --daemon || true
+    [ -x /usr/bin/udevadm ] && /usr/bin/udevadm trigger --subsystem-match=input || true
+    [ -x /usr/bin/udevadm ] && /usr/bin/udevadm settle --timeout=5 || true
+  fi
+fi
+
+cleanup() {
+  if [ -n "$xorg_pid" ]; then
+    kill "$xorg_pid" 2>/dev/null || true
+    wait "$xorg_pid" 2>/dev/null || true
+  fi
+}
+trap cleanup EXIT HUP INT TERM
+
+display_socket=/tmp/.X11-unix/X0
+if [ -S "$display_socket" ] && ! DISPLAY="$display" xprop -root >/dev/null 2>&1; then
+  # A stale socket can remain after an unclean Xorg exit.  Do not treat it
+  # as a usable display or LXDE will hang while connecting to it.
+  rm -f "$display_socket" /tmp/.X0-lock
+fi
+
+if [ ! -S "$display_socket" ]; then
+  if ! command -v Xorg >/dev/null 2>&1; then
+    echo "ERROR: Xorg is not installed (install xorg-server and its dependencies)." >&2
+    exit 127
+  fi
+  mkdir -p /var/log
+  # This image intentionally ships without Mesa software GL.  Disable the
+  # optional GLX extension so Xorg does not probe swrast_dri.so at startup;
+  # GTK/LXDE use the 2D XRender path and do not require GLX.
+  Xorg "$display" vt1 -nolisten tcp -extension GLX -logfile "$xorg_log" >/dev/null 2>&1 &
+  xorg_pid=$!
+  attempt=0
+  while [ "$attempt" -lt 30 ]; do
+    [ -S "$display_socket" ] && break
+    if ! kill -0 "$xorg_pid" 2>/dev/null; then
+      echo "ERROR: Xorg exited before creating display $display." >&2
+      echo "See $xorg_log for details." >&2
+      exit 1
+    fi
+    attempt=$((attempt + 1))
+    sleep 1
+  done
+fi
+
+if [ ! -S "$display_socket" ]; then
+  echo "ERROR: Timed out waiting for Xorg display $display." >&2
+  echo "See $xorg_log for details." >&2
+  exit 1
+fi
+export DISPLAY="$display"
+export XDG_CURRENT_DESKTOP=LXDE
+export XDG_SESSION_DESKTOP=LXDE
+
+# Refresh the fontconfig cache when fonts were installed into a minimal
+# rootfs without running the usual post-install hooks.
+if command -v fc-cache >/dev/null 2>&1; then
+  fc-cache -f >/dev/null 2>&1 || true
+fi
+
+# The package manager copies the GDK-Pixbuf modules verbatim and cannot run
+# its target binary while installing into another root.  Build the cache in
+# the running system instead, after libpng and the remaining GTK runtime have
+# been installed.  Without it GTK2 falls back to "unknown image format" for
+# panel and application PNG icons.
+if command -v gdk-pixbuf-query-loaders >/dev/null 2>&1; then
+  loader_cache=/usr/lib/x86_64-linux-gnu/gdk-pixbuf-2.0/2.10.0/loaders.cache
+  loader_dir=/usr/lib/x86_64-linux-gnu/gdk-pixbuf-2.0/2.10.0/loaders
+  if [ -d "$loader_dir" ]; then
+    mkdir -p "$(dirname "$loader_cache")"
+    gdk-pixbuf-query-loaders >"$loader_cache" 2>/dev/null || true
+  fi
+fi
+
+# Start a private session bus up front.  Without a system bus in the minimal
+# rootfs, lxde's startlxde helper can block inside dbus-launch indefinitely.
+if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ] && command -v dbus-daemon >/dev/null 2>&1; then
+  mkdir -p /run/user/0
+  dbus_address=$(dbus-daemon --session --fork --print-address 2>/dev/null || true)
+  if [ -n "$dbus_address" ]; then
+    export DBUS_SESSION_BUS_ADDRESS="$dbus_address"
+  fi
+fi
+
+if [ ! -x /usr/bin/startlxde ]; then
+  echo "ERROR: /usr/bin/startlxde is missing (reinstall lxde-common)." >&2
+  exit 127
+fi
+
+if [ -x /usr/bin/adavalinux-xrefresh ]; then
+  # GTK2/LXPanel can miss their first expose on software modesetting.  Give
+  # every window a real repaint after the session creates its widgets.
+  (
+    n=0
+    while [ "$n" -lt 3 ]; do
+      sleep 1
+      DISPLAY="$display" /usr/bin/adavalinux-xrefresh >/dev/null 2>&1 || true
+      n=$((n + 1))
+    done
+  ) &
+fi
+
+/usr/bin/startlxde &
+session_pid=$!
+wait "$session_pid"
+rc=$?
+if [ "$rc" -ne 0 ]; then
+  echo "ERROR: LXDE session exited with status $rc." >&2
+fi
+exit "$rc"

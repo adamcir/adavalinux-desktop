@@ -1,26 +1,9 @@
 #!/bin/sh
 set -eu
 
-export ADAVALINUX_THEME="${ADAVALINUX_THEME:-default}"
-export ADAVALINUX_THEME_FILE="${ADAVALINUX_THEME_FILE:-/usr/share/adavalinux/themes/${ADAVALINUX_THEME}/theme.conf}"
+if command -v startlxde >/dev/null 2>&1; then
+  exec startlxde
+fi
 
-command -v openbox >/dev/null 2>&1 || {
-  echo 'adavalinux-session: Openbox is not installed' >&2
-  exit 1
-}
-command -v adavalinux-panel >/dev/null 2>&1 || {
-  echo 'adavalinux-session: adavalinux-panel is not installed' >&2
-  exit 1
-}
-
-adavalinux-panel --position top &
-top_panel=$!
-adavalinux-panel --position bottom &
-bottom_panel=$!
-
-cleanup() {
-  kill "$top_panel" "$bottom_panel" 2>/dev/null || true
-}
-trap cleanup EXIT HUP INT TERM
-
-exec openbox --replace
+echo 'adavalinux-session: startlxde is not installed' >&2
+exit 1

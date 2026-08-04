@@ -10,32 +10,42 @@ VERSION := 0.1.0
 
 .PHONY: all clean package
 
-all: $(BUILD_DIR)/usr/bin/adavalinux-panel $(BUILD_DIR)/usr/bin/adavalinux-session \
-	$(BUILD_DIR)/usr/bin/adavalinux-greeter $(BUILD_DIR)/usr/bin/adavalinux-display-manager \
-	$(BUILD_DIR)/etc/pam.d/adavalinux-greeter $(BUILD_DIR)/usr/share/adavalinux/themes/default/theme.conf \
-	$(BUILD_DIR)/usr/share/X11/xkb/rules/evdev $(BUILD_DIR)/usr/bin/xkbcomp
-
-$(BUILD_DIR)/usr/bin/adavalinux-panel: adavalinux-panel.c
-	mkdir -p $(dir $@)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o $@ $< $(LDLIBS)
+all: $(BUILD_DIR)/usr/bin/adavalinux-session $(BUILD_DIR)/usr/bin/adavalinux-lxde-start \
+	$(BUILD_DIR)/usr/bin/adavalinux-xrefresh
 
 $(BUILD_DIR)/usr/bin/adavalinux-session: adavalinux-session
 	mkdir -p $(dir $@)
 	install -m 0755 $< $@
 
-$(BUILD_DIR)/usr/bin/adavalinux-greeter: adavalinux-greeter.c pam_compat.h
+$(BUILD_DIR)/usr/bin/adavalinux-lxde-start: adavalinux-lxde-start
 	mkdir -p $(dir $@)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o $@ adavalinux-greeter.c -l:libpam.so.0 -lX11
+	install -m 0755 $< $@
+
+$(BUILD_DIR)/usr/bin/adavalinux-xrefresh: adavalinux-xrefresh.c
+	mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o $@ $< -lX11 $(LDLIBS)
+
+$(BUILD_DIR)/usr/bin/adavalinux-logon: adavalinux-logon.c pam_compat.h
+	mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o $@ adavalinux-logon.c -l:libpam.so.0 -lX11
+
+$(BUILD_DIR)/usr/bin/adavalinux-x-ready: adavalinux-x-ready.c
+	mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o $@ $< $(LDLIBS)
 
 $(BUILD_DIR)/usr/bin/adavalinux-display-manager: adavalinux-display-manager
 	mkdir -p $(dir $@)
 	install -m 0755 $< $@
 
-$(BUILD_DIR)/etc/pam.d/adavalinux-greeter: pam.d/adavalinux-greeter
+$(BUILD_DIR)/etc/pam.d/adavalinux-logon: pam.d/adavalinux-logon
 	mkdir -p $(dir $@)
 	install -m 0644 $< $@
 
 $(BUILD_DIR)/usr/share/adavalinux/themes/default/theme.conf: themes/default/theme.conf
+	mkdir -p $(dir $@)
+	install -m 0644 $< $@
+
+$(BUILD_DIR)/etc/X11/xorg.conf: xorg.conf
 	mkdir -p $(dir $@)
 	install -m 0644 $< $@
 
@@ -53,17 +63,24 @@ $(BUILD_DIR)/usr/bin/xkbcomp:
 	cp -aL /usr/lib/x86_64-linux-gnu/libXau.so.6 $(BUILD_DIR)/usr/lib/x86_64-linux-gnu/
 	cp -aL /usr/lib/x86_64-linux-gnu/libXdmcp.so.6 $(BUILD_DIR)/usr/lib/x86_64-linux-gnu/
 
-package: all
+package: all $(BUILD_DIR)/etc/X11/xorg.conf
 	rm -rf $(BUILD_DIR)/package-root out
 	mkdir -p $(BUILD_DIR)/package-root/adavalinux-desktop-$(VERSION)
-	cp -a $(BUILD_DIR)/usr $(BUILD_DIR)/etc $(BUILD_DIR)/package-root/adavalinux-desktop-$(VERSION)/
 	cp $(PACKAGE_DIR)/adavalinux-desktop/syspckg-info $(PACKAGE_DIR)/adavalinux-desktop/syspckg-deps $(PACKAGE_DIR)/adavalinux-desktop/install.sh $(BUILD_DIR)/package-root/adavalinux-desktop-$(VERSION)/
-	mkdir -p $(BUILD_DIR)/package-root/adavalinux-theme-default-$(VERSION)/usr/share/adavalinux/themes/default
-	cp themes/default/theme.conf $(BUILD_DIR)/package-root/adavalinux-theme-default-$(VERSION)/usr/share/adavalinux/themes/default/
-	cp $(PACKAGE_DIR)/adavalinux-theme-default/syspckg-info $(BUILD_DIR)/package-root/adavalinux-theme-default-$(VERSION)/
+	mkdir -p $(BUILD_DIR)/package-root/adavalinux-desktop-$(VERSION)/usr/bin
+	cp $(BUILD_DIR)/usr/bin/adavalinux-session $(BUILD_DIR)/usr/bin/adavalinux-lxde-start \
+		$(BUILD_DIR)/usr/bin/adavalinux-xrefresh $(BUILD_DIR)/package-root/adavalinux-desktop-$(VERSION)/usr/bin/
+	mkdir -p $(BUILD_DIR)/package-root/adavalinux-desktop-$(VERSION)/etc/X11
+	cp $(BUILD_DIR)/etc/X11/xorg.conf $(BUILD_DIR)/package-root/adavalinux-desktop-$(VERSION)/etc/X11/xorg.conf
+	mkdir -p $(BUILD_DIR)/package-root/adavalinux-desktop-$(VERSION)/usr/share/adavalinux/panel-icons
+	cp -a assets/panel-icons/*.png $(BUILD_DIR)/package-root/adavalinux-desktop-$(VERSION)/usr/share/adavalinux/panel-icons/
+	if [ -d font-dejavu-package/font-dejavu-2.37/usr/share/fonts/truetype/dejavu ]; then \
+		mkdir -p $(BUILD_DIR)/package-root/adavalinux-desktop-$(VERSION)/usr/share/fonts/truetype/dejavu; \
+		cp -a font-dejavu-package/font-dejavu-2.37/usr/share/fonts/truetype/dejavu/*.ttf \
+			$(BUILD_DIR)/package-root/adavalinux-desktop-$(VERSION)/usr/share/fonts/truetype/dejavu/; \
+	fi
 	mkdir -p out
 	tar -C $(BUILD_DIR)/package-root -cJf out/adavalinux-desktop-$(VERSION).syspckg adavalinux-desktop-$(VERSION)
-	tar -C $(BUILD_DIR)/package-root -cJf out/adavalinux-theme-default-$(VERSION).syspckg adavalinux-theme-default-$(VERSION)
 
 clean:
 	rm -rf $(BUILD_DIR) out
