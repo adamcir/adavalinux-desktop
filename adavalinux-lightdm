@@ -1,0 +1,47 @@
+#!/bin/sh
+set -eu
+
+bus_ready() {
+  /usr/bin/dbus-send --system --type=method_call \
+    --dest=org.freedesktop.DBus / org.freedesktop.DBus.ListNames \
+    >/dev/null 2>&1
+}
+
+prepare_system_bus() {
+  # Older AdavaLinux D-Bus archives used the obsolete /usr/var/run location.
+  # All clients, including dbus-send, use /run; keep the daemon on that same
+  # socket even when an existing system has the older archive installed.
+  if [ -f /usr/share/dbus-1/system.conf ]; then
+    sed -i 's|/usr/var/run/dbus|/run/dbus|g' /usr/share/dbus-1/system.conf
+  fi
+}
+
+start_system_bus() {
+  mkdir -p /run/dbus /var/log
+  chown messagebus:messagebus /run/dbus 2>/dev/null || true
+  prepare_system_bus
+
+  if bus_ready; then
+    return 0
+  fi
+
+  rm -f /run/dbus/system_bus_socket /run/dbus/pid
+  /usr/bin/dbus-daemon --config-file=/usr/share/dbus-1/system.conf \
+    >>/var/log/adavalinux-dbus.log 2>&1 || true
+
+  attempt=0
+  while [ "$attempt" -lt 10 ]; do
+    bus_ready && return 0
+    attempt=$((attempt + 1))
+    sleep 1
+  done
+
+  return 1
+}
+
+while ! start_system_bus; do
+  echo 'adavalinux-lightdm: system D-Bus is not ready; retrying' >&2
+  sleep 2
+done
+
+exec /usr/sbin/lightdm

@@ -1,9 +1,9 @@
 #!/bin/sh
 set -eu
 
-if command -v startlxde >/dev/null 2>&1; then
-  exec startlxde
+if [ ! -x /usr/bin/adavalinux-xfce-start ]; then
+  echo 'adavalinux-session: XFCE launcher is not installed' >&2
+  exit 127
 fi
 
-echo 'adavalinux-session: startlxde is not installed' >&2
-exit 1
+exec /usr/bin/adavalinux-xfce-start

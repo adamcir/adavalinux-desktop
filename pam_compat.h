@@ -19,12 +19,18 @@ struct pam_conv {
 };
 
 #define PAM_SUCCESS 0
+#define PAM_CONV_ERR 19
 #define PAM_PROMPT_ECHO_OFF 1
 #define PAM_PROMPT_ECHO_ON 2
+#define PAM_ESTABLISH_CRED 0x0002U
+#define PAM_DELETE_CRED 0x0004U
 
 int pam_start(const char *service_name, const char *user, const struct pam_conv *pam_conversation, pam_handle_t **pamh);
 int pam_end(pam_handle_t *pamh, int pam_status);
 int pam_authenticate(pam_handle_t *pamh, int flags);
 int pam_acct_mgmt(pam_handle_t *pamh, int flags);
+int pam_setcred(pam_handle_t *pamh, int flags);
+int pam_open_session(pam_handle_t *pamh, int flags);
+int pam_close_session(pam_handle_t *pamh, int flags);
 
 #endif

@@ -2,11 +2,27 @@
 set -eu
 
 display=:0
+chown root:root /run /dev/null 2>/dev/null || true
+chmod 755 /run 2>/dev/null || true
+chmod 666 /dev/null 2>/dev/null || true
+mkdir -p /dev/pts
+if ! awk '$2=="/dev/pts" && $4 ~ /(^|,)ptmxmode=666(,|$)/{found=1} END{exit !found}' /proc/mounts 2>/dev/null; then
+  if awk '$2=="/dev/pts"{found=1} END{exit !found}' /proc/mounts 2>/dev/null; then
+    mount -o remount,gid=5,mode=620,ptmxmode=666 -t devpts devpts /dev/pts 2>/dev/null || true
+  else
+    mount -t devpts -o gid=5,mode=620,ptmxmode=666 devpts /dev/pts 2>/dev/null || true
+  fi
+fi
+ln -sfn pts/ptmx /dev/ptmx 2>/dev/null || true
+chmod 666 /dev/ptmx 2>/dev/null || true
+
 if [ ! -S /run/udev/control ]; then
   mkdir -p /run /run/udev
-  /usr/lib/systemd/systemd-udevd --daemon
-  /usr/bin/udevadm trigger --subsystem-match=input &
-  /usr/bin/udevadm settle --timeout=5 >/dev/null 2>&1 &
+  if [ -x /usr/lib/systemd/systemd-udevd ]; then
+    /usr/lib/systemd/systemd-udevd --daemon || true
+    [ -x /usr/bin/udevadm ] && /usr/bin/udevadm trigger --subsystem-match=input &
+    [ -x /usr/bin/udevadm ] && /usr/bin/udevadm settle --timeout=5 >/dev/null 2>&1 &
+  fi
 fi
 
 Xorg "$display" vt1 -nolisten tcp &

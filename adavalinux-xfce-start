@@ -1,0 +1,31 @@
+#!/bin/sh
+set -eu
+
+# This program runs as the authenticated desktop user.  Device nodes, devpts,
+# udev and Xorg are prepared by adavalinux-display-manager while it is root.
+display=${DISPLAY:-:0}
+
+export DISPLAY="$display"
+export XDG_CURRENT_DESKTOP=XFCE
+export XDG_SESSION_DESKTOP=XFCE
+export DESKTOP_SESSION=xfce
+
+if [ ! -x /usr/bin/xfce4-session ]; then
+  echo 'ERROR: /usr/bin/xfce4-session is missing (install xfce4-session).' >&2
+  exit 127
+fi
+
+runtime_dir=${XDG_RUNTIME_DIR:-/tmp/adavalinux-runtime-$USER}
+mkdir -p "$runtime_dir"
+chmod 700 "$runtime_dir"
+export XDG_RUNTIME_DIR="$runtime_dir"
+
+if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ] && command -v dbus-daemon >/dev/null 2>&1; then
+  dbus_address=$(dbus-daemon --session --fork --print-address 2>/dev/null || true)
+  if [ -n "$dbus_address" ]; then
+    export DBUS_SESSION_BUS_ADDRESS="$dbus_address"
+  fi
+fi
+
+rm -rf "${XDG_CACHE_HOME:-$HOME/.cache}/sessions"
+exec /usr/bin/xfce4-session
