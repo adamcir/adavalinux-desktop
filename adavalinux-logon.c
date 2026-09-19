@@ -275,20 +275,26 @@ static void set_arrow_cursor(GtkWidget *widget, gpointer data)
 static void install_css(void)
 {
     static const char css[] =
-        "#logon-window {"
-        "  background-image: linear-gradient(135deg, #f5a623 0%, #f7c65b 42%, #c8ee7d 72%, #a8df67 100%);"
+        "#logon-window { background: #d8ee86; }"
+        "#logon-background {"
+        "  background-image: linear-gradient(135deg,"
+        "    #f3a536 0%,"
+        "    #f7c85e 38%,"
+        "    #d8ee86 67%,"
+        "    #b9e46e 100%);"
         "}"
-        ".login-card {"
-        "  background: rgba(250, 252, 247, 0.94);"
-        "  border-radius: 18px;"
-        "  padding: 34px;"
-        "  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);"
+        "#login-card {"
+        "  background: #ffffff;"
+        "  border-radius: 20px;"
+        "  padding: 0;"
+        "  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);"
         "}"
-        ".login-title { font-size: 30px; font-weight: bold; color: #25321e; }"
-        ".login-subtitle { color: #556149; }"
+        ".login-content { padding: 30px; }"
+        ".login-title { font-size: 28px; font-weight: bold; color: #25321e; }"
+        ".login-subtitle { color: #5d6853; }"
         ".login-error { color: #b42318; font-weight: bold; }"
-        "entry { padding: 11px; min-height: 24px; }"
-        "button { padding: 10px 20px; }";
+        "entry { padding: 10px; min-height: 22px; }"
+        "button { padding: 9px 18px; }";
 
     GtkCssProvider *provider = gtk_css_provider_new();
     gtk_css_provider_load_from_data(provider, css, -1, NULL);
@@ -317,47 +323,59 @@ int main(int argc, char **argv)
     g_signal_connect(ui.window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
     g_signal_connect(ui.window, "realize", G_CALLBACK(set_arrow_cursor), NULL);
 
-    GtkWidget *background = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    GtkWidget *background = gtk_event_box_new();
+    gtk_widget_set_name(background, "logon-background");
     gtk_widget_set_hexpand(background, TRUE);
     gtk_widget_set_vexpand(background, TRUE);
     gtk_container_add(GTK_CONTAINER(ui.window), background);
 
-    GtkWidget *card = gtk_box_new(GTK_ORIENTATION_VERTICAL, 14);
-    gtk_style_context_add_class(gtk_widget_get_style_context(card), "login-card");
-    gtk_widget_set_size_request(card, 460, -1);
+    GtkWidget *layout = gtk_grid_new();
+    gtk_widget_set_hexpand(layout, TRUE);
+    gtk_widget_set_vexpand(layout, TRUE);
+    gtk_widget_set_halign(layout, GTK_ALIGN_FILL);
+    gtk_widget_set_valign(layout, GTK_ALIGN_FILL);
+    gtk_container_add(GTK_CONTAINER(background), layout);
+
+    GtkWidget *card = gtk_frame_new(NULL);
+    gtk_widget_set_name(card, "login-card");
+    gtk_frame_set_shadow_type(GTK_FRAME(card), GTK_SHADOW_NONE);
+    gtk_widget_set_size_request(card, 420, -1);
     gtk_widget_set_halign(card, GTK_ALIGN_CENTER);
     gtk_widget_set_valign(card, GTK_ALIGN_CENTER);
-    gtk_container_set_border_width(GTK_CONTAINER(card), 26);
-    gtk_box_pack_start(GTK_BOX(background), card, TRUE, FALSE, 0);
+    gtk_grid_attach(GTK_GRID(layout), card, 0, 0, 1, 1);
+
+    GtkWidget *content = gtk_box_new(GTK_ORIENTATION_VERTICAL, 14);
+    gtk_style_context_add_class(gtk_widget_get_style_context(content), "login-content");
+    gtk_container_add(GTK_CONTAINER(card), content);
 
     GtkWidget *title = gtk_label_new("Welcome to AdavaLinux");
     gtk_style_context_add_class(gtk_widget_get_style_context(title), "login-title");
     gtk_widget_set_halign(title, GTK_ALIGN_START);
-    gtk_box_pack_start(GTK_BOX(card), title, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(content), title, FALSE, FALSE, 0);
 
     GtkWidget *subtitle = gtk_label_new("Sign in to start your XFCE desktop.");
     gtk_style_context_add_class(gtk_widget_get_style_context(subtitle), "login-subtitle");
     gtk_widget_set_halign(subtitle, GTK_ALIGN_START);
-    gtk_box_pack_start(GTK_BOX(card), subtitle, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(content), subtitle, FALSE, FALSE, 0);
 
     ui.user_entry = gtk_entry_new();
     gtk_entry_set_placeholder_text(GTK_ENTRY(ui.user_entry), "User name");
-    gtk_box_pack_start(GTK_BOX(card), ui.user_entry, FALSE, FALSE, 6);
+    gtk_box_pack_start(GTK_BOX(content), ui.user_entry, FALSE, FALSE, 6);
 
     ui.password_entry = gtk_entry_new();
     gtk_entry_set_placeholder_text(GTK_ENTRY(ui.password_entry), "Password");
     gtk_entry_set_visibility(GTK_ENTRY(ui.password_entry), FALSE);
     gtk_entry_set_invisible_char(GTK_ENTRY(ui.password_entry), 0x2022);
-    gtk_box_pack_start(GTK_BOX(card), ui.password_entry, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(content), ui.password_entry, FALSE, FALSE, 0);
 
     ui.status = gtk_label_new("");
     gtk_style_context_add_class(gtk_widget_get_style_context(ui.status), "login-error");
     gtk_widget_set_halign(ui.status, GTK_ALIGN_START);
-    gtk_box_pack_start(GTK_BOX(card), ui.status, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(content), ui.status, FALSE, FALSE, 0);
 
     GtkWidget *button = gtk_button_new_with_label("Log in");
     gtk_widget_set_halign(button, GTK_ALIGN_END);
-    gtk_box_pack_end(GTK_BOX(card), button, FALSE, FALSE, 8);
+    gtk_box_pack_end(GTK_BOX(content), button, FALSE, FALSE, 8);
 
     g_signal_connect(button, "clicked", G_CALLBACK(on_login_clicked), &ui);
     g_signal_connect(ui.password_entry, "activate", G_CALLBACK(on_password_activate), &ui);
