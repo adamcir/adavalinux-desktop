@@ -51,6 +51,37 @@ if [ -x /sbin/ldconfig ]; then
   /sbin/ldconfig -r "$root" 2>/dev/null || true
 fi
 
+# Linux-PAM can be built with different security-module directories
+# (/usr/lib/security, /lib/security or a multiarch directory).  A bare
+# "pam_unix.so" then fails if the runtime search directory does not match the
+# package layout.  Resolve the module at install time and write an absolute
+# path into the AdavaLinux logon PAM service.
+pam_unix=
+for candidate in \
+  /usr/lib/security/pam_unix.so \
+  /lib/security/pam_unix.so \
+  /usr/lib/x86_64-linux-gnu/security/pam_unix.so \
+  /lib/x86_64-linux-gnu/security/pam_unix.so \
+  /usr/lib64/security/pam_unix.so \
+  /lib64/security/pam_unix.so
+do
+  if [ -f "$root$candidate" ]; then
+    pam_unix=$candidate
+    break
+  fi
+done
+
+if [ -n "$pam_unix" ]; then
+  mkdir -p "$root/etc/pam.d"
+  cat > "$root/etc/pam.d/adavalinux-logon" <<EOF
+auth required $pam_unix
+account required $pam_unix
+session required $pam_unix
+EOF
+else
+  echo 'adavalinux-desktop: warning: pam_unix.so was not found in the target root' >&2
+fi
+
 # D-Bus clients use /run/dbus. Repair the obsolete path in an older D-Bus
 # archive as well, so installing desktop fixes existing installations.
 if [ -f "$root/usr/share/dbus-1/system.conf" ]; then
