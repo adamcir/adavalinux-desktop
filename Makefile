@@ -9,7 +9,7 @@ GTK_LIBS := $(shell $(PKG_CONFIG) --libs gtk+-3.0)
 
 BUILD_DIR := build
 PACKAGE_DIR := packages
-VERSION := 0.1.0
+VERSION := 0.1.1
 
 .PHONY: all clean package
 
