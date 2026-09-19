@@ -9,7 +9,7 @@ GTK_LIBS := $(shell $(PKG_CONFIG) --libs gtk+-3.0)
 
 BUILD_DIR := build
 PACKAGE_DIR := packages
-VERSION := 0.1.1
+VERSION := 0.1.0
 
 .PHONY: all clean package
 
@@ -39,7 +39,7 @@ $(BUILD_DIR)/usr/bin/adavalinux-xrefresh: adavalinux-xrefresh.c
 
 $(BUILD_DIR)/usr/bin/adavalinux-logon: adavalinux-logon.c pam_compat.h
 	mkdir -p $(dir $@)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(GTK_CFLAGS) $(LDFLAGS) -o $@ adavalinux-logon.c -l:libpam.so.0 $(GTK_LIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(GTK_CFLAGS) $(LDFLAGS) -o $@ adavalinux-logon.c -l:libpam.so.0 -ldl $(GTK_LIBS)
 
 $(BUILD_DIR)/usr/bin/adavalinux-x-ready: adavalinux-x-ready.c
 	mkdir -p $(dir $@)
